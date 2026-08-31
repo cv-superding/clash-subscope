@@ -1,0 +1,21 @@
+# 系统与运行时
+_scratch/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+_shot*.png
+_shot_*.ps1
+
+# 个人开发日志
+.workbuddy/
+.workbuddy/**
+
+# IDE / 编辑器
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

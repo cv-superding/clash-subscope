@@ -31,7 +31,7 @@ Clash 系客户端（包括 Clash Verge Rev / Clash for Windows / FlClash / Nyan
 
 ## ✨ 特性
 
-| | |
+| 功能 | 描述 |
 | --- | --- |
 | 🖱️ 一键扫描 | GUI 单按钮，自动找出本机已安装的所有 Clash 客户端 |
 | 📋 完整订阅列表 | 按配置名称逐一列出，每条都给出客户端、来源、更新/流量/到期 |

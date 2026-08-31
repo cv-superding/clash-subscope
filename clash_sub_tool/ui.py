@@ -8,7 +8,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from typing import List, Optional
 
-from . import __version__, clients, importer, proxymgr
+from . import __version__, clients, importer, proxymgr, clashctl
 from .formatting import (build_export_text, default_export_path, fmt_expire,
                          fmt_time, fmt_traffic, mask_url)
 from .models import LV_ERROR, LV_WARN, ScanResult, SubscriptionItem
@@ -170,8 +170,9 @@ class App:
                                             command=self._restore_proxy)
         self.btn_restore_proxy.pack(side="left", padx=(8, 0))
 
-        ttk.Label(card, text="提示：粘贴朋友的订阅链接后点「导入到 Clash」，工具会自动关掉系统代理"
-                  "（避开代理导致的 HTTP/2/403），写入后请在 Clash 内更新订阅，再点「恢复代理」。",
+        ttk.Label(card, text="提示：粘贴朋友的订阅链接后点「导入到 Clash」，工具会先自动关闭正在运行的"
+                  " Clash（避免写入被覆盖）、临时关掉系统代理（避开 HTTP/2/403），写入后请重新打开 Clash 并更新订阅"
+                  " 再点「恢复代理」。",
                   style="Muted.TLabel").pack(anchor="w", pady=(6, 0))
 
     def _build_table(self) -> None:
@@ -492,22 +493,48 @@ class App:
                 "请先确认客户端已安装（建议正在运行）。")
             return
 
-        running_note = ""
-        if target.running:
-            running_note = ("\n\n注意：%s 当前正在运行。导入会写入其配置文件，"
-                            "但需完全退出并重新打开后新订阅才会生效"
-                            "（否则可能被客户端覆盖）。建议先退出 %s 再继续。"
-                            % (target.name, target.name))
         ok = messagebox.askyesno(
             "确认导入",
             "将把以下订阅添加到【%s】：\n\n%s\n\n"
-            "为让导入成功，工具会临时关闭系统代理（你的「梯子」），"
-            "导入完成后请点「恢复代理」重新开启。\n\n"
-            "工具只写配置文件、不替你拉取节点；节点需在 Clash 内手动点「更新」。%s"
-            % (target.name, url, running_note),
+            "导入过程中工具会：\n"
+            "• 先关闭正在运行的 %s（否则它会覆盖刚写入的配置）；\n"
+            "• 临时关闭系统代理（你的「梯子」），让订阅能直连拉取、避开 HTTP/2/403；\n"
+            "• 写入配置文件。\n\n"
+            "工具只写配置、不替你拉节点；节点需在 Clash 内手动点「更新」。\n"
+            "写完后请重新打开 Clash、点更新，再点本工具的「恢复代理」。"
+            % (target.name, url, target.name),
         )
         if not ok:
             return
+
+        # 0) 若客户端正在运行，先关闭（关键：避免写入竞争）
+        if clashctl.is_running(target):
+            names = clashctl.running_process_names(target)
+            close_ok = messagebox.askyesno(
+                "需先关闭 Clash",
+                "检测到 %s 正在运行（%s）。\n\n"
+                "写入订阅时它会在后台改写同一份配置文件，导致导入被覆盖。\n"
+                "是否让本工具先关闭它再导入？（关闭后你需手动重新打开 Clash）"
+                % (target.name, "、".join(sorted(set(names))) or "进程"),
+            )
+            if not close_ok:
+                messagebox.showinfo(
+                    "已取消",
+                    "你选择保留 Clash 运行，导入已取消。\n"
+                    "如需导入，请先在系统托盘退出 %s，再重试。" % target.name)
+                return
+            ok_close, msg_close = clashctl.close(target)
+            if not ok_close:
+                messagebox.showerror(
+                    "无法关闭 Clash",
+                    "%s\n\n请手动在系统托盘退出 %s 后重试导入。"
+                    % (msg_close, target.name))
+                return
+            self._toast("已关闭 %s" % target.name)
+            # 等进程真正退出并释放文件句柄
+            self.root.update_idletasks()
+            import time
+            time.sleep(1.2)
 
         # 1) 临时关闭系统代理（让 Clash 直连拉取，避开 HTTP/2/403）
         self._proxy_state = proxymgr.disable_system_proxy()
@@ -527,12 +554,12 @@ class App:
             return
 
         # 3) 成功
-        self._toast("已导入，请重启 Clash 并更新订阅")
+        self._toast("已导入：请重新打开 Clash 并更新订阅")
         messagebox.showinfo(
             "导入成功",
             "%s\n\n接下来请：\n"
-            "1) 完全退出并重新打开 %s（让新订阅生效）；\n"
-            "2) 在订阅上点「更新」（此时系统代理已关闭，可直连拉取，避开 HTTP/2/403）；\n"
+            "1) 重新打开 %s；\n"
+            "2) 选中新订阅点「更新」（系统代理已关闭，可直连拉取、避开 HTTP/2/403）；\n"
             "3) 节点拉取完成后，点本工具右上角「恢复代理」重新开启梯子。\n\n"
             "提示：本工具只写配置，不替你拉取节点。" % (msg, target.name),
         )

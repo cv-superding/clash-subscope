@@ -1,17 +1,42 @@
 # -*- coding: utf-8 -*-
-"""桌面 GUI（tkinter，简体中文，浅色主题）。"""
+"""桌面 GUI（ttkbootstrap 主题化，简体中文，现代化浅色主题）。"""
 
 import os
 import queue
 import threading
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox
 from typing import List, Optional
+
+import ttkbootstrap as ttk
+from ttkbootstrap.constants import *
+from ttkbootstrap.dialogs import Messagebox
 
 from . import __version__, clients, importer, proxymgr, clashctl
 from .formatting import (build_export_text, default_export_path, fmt_expire,
                          fmt_time, fmt_traffic, mask_url)
 from .models import LV_ERROR, LV_WARN, ScanResult, SubscriptionItem
+
+# 把标准库 messagebox 重定向到 ttkbootstrap 主题化对话框，
+# 但保持 tkinter 兼容的「title 在前、message 在后」签名与布尔返回值，
+# 从而所有 messagebox.* 调用点无需改动。
+def _mb_error(title, message):
+    return Messagebox.show_error(message=message, title=title)
+
+def _mb_info(title, message):
+    return Messagebox.show_info(message=message, title=title)
+
+def _mb_warn(title, message):
+    return Messagebox.show_warning(message=message, title=title)
+
+def _mb_yesno(title, message):
+    r = Messagebox.yesno(message=message, title=title)
+    return str(r).strip().lower() in ("yes", "true", "1")
+
+messagebox.showerror = _mb_error
+messagebox.showinfo = _mb_info
+messagebox.showwarning = _mb_warn
+messagebox.askyesno = _mb_yesno
 
 # ---------------- 配色（浅色主题） ----------------
 C_BG = "#f4f6f9"
@@ -60,16 +85,11 @@ class App:
     # 构建界面
     # ------------------------------------------------------------------
     def _build_style(self) -> None:
+        # ttkbootstrap 的 cosmo 主题已在 main.py 的 tb.Window 中激活，
+        # 这里只补充项目内自定义样式，不再手动覆盖全局配色（避免与主题冲突）。
         st = ttk.Style()
-        try:
-            st.theme_use("clam")
-        except tk.TclError:
-            pass
 
-        st.configure(".", background=C_BG, foreground=C_TEXT, font=(FONT, 10))
-        st.configure("TFrame", background=C_BG)
         st.configure("Card.TFrame", background=C_CARD, relief="flat")
-        st.configure("TLabel", background=C_BG, foreground=C_TEXT, font=(FONT, 10))
         st.configure("Card.TLabel", background=C_CARD, foreground=C_TEXT)
         st.configure("Muted.TLabel", background=C_CARD, foreground=C_MUTED, font=(FONT, 9))
         st.configure("Head.TLabel", background=C_BG, foreground=C_TEXT,
@@ -78,32 +98,12 @@ class App:
         st.configure("Badge.TLabel", background="#e8f5e9", foreground=C_OK,
                      font=(FONT, 9, "bold"), padding=(8, 2))
 
-        st.configure("Accent.TButton", font=(FONT, 10, "bold"), padding=(18, 8),
-                     background=C_ACCENT, foreground="#ffffff", borderwidth=0,
-                     focuscolor=C_ACCENT)
-        st.map("Accent.TButton",
-               background=[("active", C_ACCENT_D), ("disabled", "#9db4e0")],
-               foreground=[("disabled", "#ffffff")])
-        st.configure("TButton", font=(FONT, 10), padding=(12, 6),
-                     background="#ffffff", foreground=C_TEXT,
-                     bordercolor=C_BORDER, focuscolor=C_ACCENT)
-        st.map("TButton", background=[("active", "#eef2f7")])
-        st.configure("TCheckbutton", background=C_CARD, foreground=C_TEXT, font=(FONT, 10))
-        st.map("TCheckbutton", background=[("active", C_CARD)])
-
         st.configure("Treeview", background="#ffffff", fieldbackground="#ffffff",
                      foreground=C_TEXT, font=(FONT, 10), rowheight=28, borderwidth=0)
         st.configure("Treeview.Heading", background="#eef2f7", foreground=C_TEXT,
                      font=(FONT, 10, "bold"), borderwidth=0, relief="flat")
         st.map("Treeview", background=[("selected", "#cfe0ff")],
                foreground=[("selected", C_TEXT)])
-        st.configure("TNotebook", background=C_BG, borderwidth=0)
-        st.configure("TNotebook.Tab", font=(FONT, 10), padding=(14, 6))
-        # ttk clam 主题下，选中态默认比未选中态多几像素 padding，标签会忽大忽小。
-        # 把选中态的 padding 强制成相同值，同时去掉未选中标签的焦点框。
-        st.map("TNotebook.Tab",
-               padding=[("selected", (14, 6))],
-               focuscolor=[("!selected", "")])
 
     def _build_header(self) -> None:
         bar = ttk.Frame(self.root, padding=(20, 14, 20, 8))
@@ -117,7 +117,7 @@ class App:
         right = ttk.Frame(bar)
         right.pack(side="right")
         ttk.Label(right, text="纯本地 · 零上传", style="Badge.TLabel").pack(side="left", padx=(0, 12))
-        self.btn_scan = ttk.Button(right, text="一键扫描", style="Accent.TButton",
+        self.btn_scan = ttk.Button(right, text="一键扫描", bootstyle="primary",
                                    command=self.start_scan)
         self.btn_scan.pack(side="left")
 
@@ -158,15 +158,16 @@ class App:
         row.pack(fill="x", pady=(8, 0))
 
         ttk.Label(row, text="链接：", style="Card.TLabel").pack(side="left")
-        self.entry_import = ttk.Entry(row, font=(FONT, 10))
+        self.entry_import = ttk.Entry(row, font=(FONT, 10), bootstyle="info")
         self.entry_import.pack(side="left", fill="x", expand=True, padx=(6, 8))
         self.entry_import.bind("<Return>", lambda e: self._import_clash_from_entry())
 
-        self.btn_import_clash = ttk.Button(row, text="➕ 导入到 Clash", style="Accent.TButton",
+        self.btn_import_clash = ttk.Button(row, text="➕ 导入到 Clash", bootstyle="primary",
                                            command=self._import_clash_from_entry)
         self.btn_import_clash.pack(side="left")
 
         self.btn_restore_proxy = ttk.Button(row, text="🔄 恢复代理", state="disabled",
+                                            bootstyle="secondary",
                                             command=self._restore_proxy)
         self.btn_restore_proxy.pack(side="left", padx=(8, 0))
 
@@ -218,17 +219,22 @@ class App:
         bar = ttk.Frame(self.root, padding=(20, 0, 20, 6))
         bar.pack(fill="x")
 
-        self.btn_copy_one = ttk.Button(bar, text="复制选中链接", command=self._copy_selected)
+        self.btn_copy_one = ttk.Button(bar, text="复制选中链接", bootstyle="secondary-outline",
+                                        command=self._copy_selected)
         self.btn_copy_one.pack(side="left")
-        self.btn_copy_all = ttk.Button(bar, text="复制全部链接", command=self._copy_all)
+        self.btn_copy_all = ttk.Button(bar, text="复制全部链接", bootstyle="secondary-outline",
+                                       command=self._copy_all)
         self.btn_copy_all.pack(side="left", padx=8)
-        self.btn_import_sel = ttk.Button(bar, text="导入选中到 Clash", command=self._import_selected)
+        self.btn_import_sel = ttk.Button(bar, text="导入选中到 Clash", bootstyle="outline",
+                                         command=self._import_selected)
         self.btn_import_sel.pack(side="left", padx=8)
-        self.btn_export = ttk.Button(bar, text="导出为 TXT", command=self._export)
+        self.btn_export = ttk.Button(bar, text="导出为 TXT", bootstyle="secondary",
+                                     command=self._export)
         self.btn_export.pack(side="left")
 
         ttk.Checkbutton(bar, text="显示完整链接（关闭脱敏）",
-                        variable=self.reveal, command=self._render_table).pack(side="left", padx=(18, 0))
+                        variable=self.reveal, command=self._render_table,
+                        bootstyle="round-toggle").pack(side="left", padx=(18, 0))
 
         self.var_toast = tk.StringVar(value="")
         ttk.Label(bar, textvariable=self.var_toast, style="Sub.TLabel").pack(side="right")
@@ -240,25 +246,21 @@ class App:
 
         f1 = ttk.Frame(nb, style="Card.TFrame")
         nb.add(f1, text="诊断与排查建议")
-        self.txt_diag = tk.Text(f1, height=8, wrap="word", relief="flat",
-                                bg=C_CARD, fg=C_TEXT, font=(FONT, 10),
-                                padx=12, pady=10, spacing1=2, spacing3=4,
-                                insertbackground=C_TEXT)
-        self.txt_diag.pack(fill="both", expand=True, side="left")
-        sb1 = ttk.Scrollbar(f1, command=self.txt_diag.yview)
-        sb1.pack(fill="y", side="right")
-        self.txt_diag.configure(yscrollcommand=sb1.set, state="disabled")
+        _sd = ttk.ScrolledText(f1, height=8, wrap="word", font=(FONT, 10))
+        _sd.pack(fill="both", expand=True, side="left")
+        self.txt_diag = _sd.text
+        self.txt_diag.configure(padx=12, pady=10, spacing1=2, spacing3=4,
+                                relief="flat", bg=C_CARD, fg=C_TEXT,
+                                insertbackground=C_TEXT, state="disabled")
 
         f2 = ttk.Frame(nb, style="Card.TFrame")
         nb.add(f2, text="选中项详情")
-        self.txt_detail = tk.Text(f2, height=8, wrap="word", relief="flat",
-                                  bg=C_CARD, fg=C_TEXT, font=(FONT_MONO, 10),
-                                  padx=12, pady=10, spacing1=2,
-                                  insertbackground=C_TEXT)
-        self.txt_detail.pack(fill="both", expand=True, side="left")
-        sb2 = ttk.Scrollbar(f2, command=self.txt_detail.yview)
-        sb2.pack(fill="y", side="right")
-        self.txt_detail.configure(yscrollcommand=sb2.set, state="disabled")
+        _sd2 = ttk.ScrolledText(f2, height=8, wrap="word", font=(FONT_MONO, 10))
+        _sd2.pack(fill="both", expand=True, side="left")
+        self.txt_detail = _sd2.text
+        self.txt_detail.configure(padx=12, pady=10, spacing1=2,
+                                  relief="flat", bg=C_CARD, fg=C_TEXT,
+                                  insertbackground=C_TEXT, state="disabled")
 
         for txt in (self.txt_diag, self.txt_detail):
             txt.tag_configure("warn", foreground=C_WARN)

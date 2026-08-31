@@ -33,9 +33,9 @@ def main() -> int:
         sys.stderr.write("依赖缺失：%s\n请安装 PyYAML：pip install pyyaml\n" % e)
         return 1
 
-    import tkinter as tk
+    import ttkbootstrap as tb
 
-    root = tk.Tk()
+    root = tb.Window(themename="cosmo")
     App(root)
     root.mainloop()
     return 0

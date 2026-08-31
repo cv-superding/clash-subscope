@@ -6,7 +6,7 @@
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078d4.svg)]()
 [![Python: 3.8+](https://img.shields.io/badge/python-3.8%2B-blue.svg)]()
 [![Status: Read-Only / Privacy-First](https://img.shields.io/badge/status-read--only-success.svg)]()
-[![Release: v1.1.1](https://img.shields.io/github/v/release/cv-superding/clash-subscope?label=release&color=0078d4)]()
+[![Release: v1.2.0](https://img.shields.io/github/v/release/cv-superding/clash-subscope?label=release&color=0078d4)]()
 
 > 🔍 **One-click extract subscription links from your local Clash clients** —
 > read-only · masked by default · zero upload.
@@ -17,7 +17,7 @@
 
 不想装 Python / 依赖？直接去 Releases 下载打包好的单文件 exe：
 
-- 👉 [clash-subscope.exe（v1.1.1）](https://github.com/cv-superding/clash-subscope/releases/download/v1.1.1/clash-subscope.exe)
+- 👉 [clash-subscope.exe（v1.2.0）](https://github.com/cv-superding/clash-subscope/releases/download/v1.2.0/clash-subscope.exe)
 
 双击即可运行（Windows 10 / 11）。同样遵循「仅读本地、默认脱敏、零上传」的隐私承诺。
 
@@ -54,7 +54,7 @@ Clash 系客户端（包括 Clash Verge Rev / Clash for Windows / FlClash / Nyan
 | 💾 导出 TXT | 完整可读文本，含每条配置的全部信息 |
 | ➕ 一键导入到 Clash | 粘贴朋友的订阅链接 → 工具自动**先关闭正在运行的 Clash**（避免写入被覆盖）、**临时关闭系统代理**（避开代理导致的 HTTP/2 中断 / 403），把链接写进本机客户端的 `profiles.yaml`，再让你重新打开 Clash、点更新、最后点「恢复代理」 |
 | 🔧 运行时探测 | 同时支持 TCP（`external-controller`）与 Windows 命名管道（`external-controller-pipe`），核心关闭 TCP 时自动回落管道 |
-| 🌐 全中文界面 | 浅色主题，clam 风格，无任何依赖外网的服务 |
+| 🌐 全中文界面 | 现代化浅色主题（ttkbootstrap / cosmo），统一圆角按钮、原生风格对话框与滚动条，无任何依赖外网的服务 |
 
 ---
 

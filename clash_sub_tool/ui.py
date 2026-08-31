@@ -70,6 +70,15 @@ class App:
         root.minsize(980, 640)
         root.configure(bg=C_BG)
 
+        # 修复最大化/拉伸时的黑闪：Windows 的 WM_SIZE 与 Tk 的重绘之间
+        # 存在一个时间窗，期间 OS 会露出未填充区域（表现为瞬间黑屏）。
+        # 给 root 绑 <Configure>，在每次尺寸变化时立即调用 update_idletasks
+        # 让 Tk 同步重绘，堵住那个黑帧。仅作用于 root 自身的尺寸变化。
+        def _on_root_configure(event):
+            if event.widget is root:
+                root.update_idletasks()
+        root.bind("<Configure>", _on_root_configure)
+
         self._build_style()
         self._build_header()
         self._build_status()

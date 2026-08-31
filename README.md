@@ -6,9 +6,20 @@
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078d4.svg)]()
 [![Python: 3.8+](https://img.shields.io/badge/python-3.8%2B-blue.svg)]()
 [![Status: Read-Only / Privacy-First](https://img.shields.io/badge/status-read--only-success.svg)]()
+[![Release: v1.0.0](https://img.shields.io/github/v/release/cv-superding/clash-subscope?label=release&color=0078d4)]()
 
 > 🔍 **One-click extract subscription links from your local Clash clients** —
 > read-only · masked by default · zero upload.
+
+---
+
+## 📥 下载（免 Python 环境）
+
+不想装 Python / 依赖？直接去 Releases 下载打包好的单文件 exe：
+
+- 👉 [clash-subscope.exe（v1.0.0）](https://github.com/cv-superding/clash-subscope/releases/download/v1.0.0/clash-subscope.exe)
+
+双击即可运行（Windows 10 / 11）。同样遵循「仅读本地、默认脱敏、零上传」的隐私承诺。
 
 ---
 

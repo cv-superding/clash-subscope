@@ -37,7 +37,12 @@ def get_proxy_state() -> Dict[str, object]:
         )
         try:
             val, _ = winreg.QueryValueEx(key, "ProxyEnable")
-            state["enabled"] = int(val) if isinstance(val, int) else 0
+            # 兼容 REG_DWORD(int) 与 REG_SZ(str "1"/"0") 两种存储方式，
+            # 避免把字符串型开启误判为"未开启"导致恢复时把代理关掉。
+            try:
+                state["enabled"] = int(str(val).strip())
+            except (ValueError, TypeError):
+                state["enabled"] = 0
         except OSError:
             state["enabled"] = 0
         for name in ("ProxyServer", "ProxyOverride"):

@@ -4,6 +4,7 @@
 import os
 import queue
 import threading
+import time
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from typing import List, Optional
@@ -525,7 +526,8 @@ class App:
         if not ok:
             return
 
-        # 0) 若客户端正在运行，先关闭（关键：避免写入竞争）
+        # 若客户端正在运行，先请求用户确认关闭（关键：避免写入竞争）
+        need_close = False
         if clashctl.is_running(target):
             names = clashctl.running_process_names(target)
             close_ok = messagebox.askyesno(
@@ -541,37 +543,82 @@ class App:
                     "你选择保留 Clash 运行，导入已取消。\n"
                     "如需导入，请先在系统托盘退出 %s，再重试。" % target.name)
                 return
-            ok_close, msg_close = clashctl.close(target)
-            if not ok_close:
-                messagebox.showerror(
-                    "无法关闭 Clash",
-                    "%s\n\n请手动在系统托盘退出 %s 后重试导入。"
-                    % (msg_close, target.name))
-                return
-            self._toast("已关闭 %s" % target.name)
-            # 等进程真正退出并释放文件句柄
-            self.root.update_idletasks()
-            import time
-            time.sleep(1.2)
+            need_close = True
 
-        # 1) 临时关闭系统代理（让 Clash 直连拉取，避开 HTTP/2/403）
-        self._proxy_state = proxymgr.disable_system_proxy()
-        if self._proxy_state is None:
-            messagebox.showwarning(
-                "代理关闭失败",
-                "临时关闭系统代理时出错，导入仍会尝试进行；\n"
-                "若之后导入失败，请手动关闭梯子代理后重试。")
-        else:
-            self.btn_restore_proxy.configure(state="normal")
+        # 关闭/写配置放到后台线程，避免阻塞 UI（尤其是等待进程退出的耗时）
+        self._import_busy(True)
+        threading.Thread(
+            target=self._import_worker,
+            args=(target, url, need_close),
+            daemon=True,
+        ).start()
 
-        # 2) 写配置
-        ok_write, msg = importer.add_subscription(target, url)
+    def _import_busy(self, busy: bool) -> None:
+        """导入进行中时禁用相关按钮，避免重复触发。"""
+        state = "disabled" if busy else "normal"
+        try:
+            self.btn_import_clash.configure(state=state)
+            self.btn_import_sel.configure(state=state)
+            self.btn_scan.configure(state=state)
+        except Exception:
+            pass
+
+    def _import_worker(self, target, url, need_close) -> None:
+        """后台执行：关闭客户端 → 关代理 → 写配置；结果回主线程处理。"""
+        try:
+            if need_close:
+                ok_close, msg_close = clashctl.close(target)
+                if not ok_close:
+                    self.root.after(0, lambda: (
+                        self._import_busy(False),
+                        messagebox.showerror(
+                            "无法关闭 Clash",
+                            "%s\n\n请手动在系统托盘退出 %s 后重试导入。"
+                            % (msg_close, target.name)),
+                    ))
+                    return
+                # 轮询等待进程真正退出并释放文件句柄（最多 ~3s），
+                # 替代主线程 sleep，避免界面冻结
+                for _ in range(30):
+                    if not clashctl.is_running(target):
+                        break
+                    time.sleep(0.1)
+
+            # 1) 临时关闭系统代理（让 Clash 直连拉取，避开 HTTP/2/403）
+            state = proxymgr.disable_system_proxy()
+            if state is None:
+                self.root.after(0, lambda: messagebox.showwarning(
+                    "代理关闭失败",
+                    "临时关闭系统代理时出错，导入仍会尝试进行；\n"
+                    "若之后导入失败，请手动关闭梯子代理后重试。"))
+            else:
+                self._proxy_state = state
+                self.root.after(0, lambda: self.btn_restore_proxy.configure(state="normal"))
+
+            # 2) 写配置
+            ok_write, msg = importer.add_subscription(target, url)
+        except Exception as e:
+            self.root.after(0, lambda: (
+                self._import_busy(False),
+                messagebox.showerror("导入异常", "导入过程出错：\n%s" % e),
+            ))
+            return
+
+        # 回主线程收尾
+        self.root.after(0, lambda: self._import_done(ok_write, msg, target))
+
+    def _import_done(self, ok_write, msg, target) -> None:
+        self._import_busy(False)
         if not ok_write:
-            messagebox.showerror("导入失败", msg)
+            # 写失败：自动恢复系统代理，避免代理遗留关闭状态
+            proxymgr.restore_system_proxy(self._proxy_state)
+            self._proxy_state = None
+            self.btn_restore_proxy.configure(state="disabled")
+            messagebox.showerror("导入失败", msg + "\n\n（系统代理已自动恢复）")
             self._toast("导入失败")
             return
 
-        # 3) 成功
+        # 成功
         self._toast("已导入：请重新打开 Clash 并更新订阅")
         messagebox.showinfo(
             "导入成功",

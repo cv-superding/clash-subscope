@@ -28,14 +28,18 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 def main() -> int:
     try:
-        from clash_sub_tool.ui import App
-    except ImportError as e:
-        sys.stderr.write("依赖缺失：%s\n请安装 PyYAML：pip install pyyaml\n" % e)
+        import ttkbootstrap  # 现代化 UI 主题（cosmo）
+    except ImportError:
+        sys.stderr.write("依赖缺失：缺少 ttkbootstrap，请执行 pip install ttkbootstrap\n")
         return 1
 
-    import ttkbootstrap as tb
+    try:
+        from clash_sub_tool.ui import App
+    except ImportError as e:
+        sys.stderr.write("依赖缺失或模块导入失败：%s\n若缺少 PyYAML 请执行 pip install pyyaml\n" % e)
+        return 1
 
-    root = tb.Window(themename="cosmo")
+    root = ttkbootstrap.Window(themename="cosmo")
     App(root)
     root.mainloop()
     return 0

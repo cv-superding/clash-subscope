@@ -56,9 +56,6 @@ def scan(progress=None) -> ScanResult:
     except Exception as e:
         rt = RuntimeInfo(error="探测过程异常：%s" % e)
     result.runtime = rt
-    if rt is None:
-        rt = RuntimeInfo(error="未执行运行时探测")
-        result.runtime = rt
 
     # 4. 合并运行时信息
     _merge_runtime(result)

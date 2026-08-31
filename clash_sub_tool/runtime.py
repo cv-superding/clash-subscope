@@ -140,23 +140,25 @@ def _tcp_get(endpoint: str, path: str, secret: Optional[str]) -> Tuple[int, dict
     with socket.create_connection((host or "127.0.0.1", int(port_s)), timeout=READ_TIMEOUT) as sock:
         sock.settimeout(READ_TIMEOUT)
         sock.sendall(_request_bytes(path, secret))
-        chunks = []
-        while True:
-            try:
-                data = sock.recv(65536)
-            except socket.timeout:
-                break
-            if not data:
-                break
-            chunks.append(data)
-            if b"\r\n\r\n" in b"".join(chunks) and len(b"".join(chunks)) > 4096:
-                # 简单判断：非 chunked 且已收满 Content-Length 时提前退出
-                head, body = _split_response(b"".join(chunks))
-                if not re.search(r"(?i)transfer-encoding:\s*chunked", head):
-                    m = re.search(r"(?i)content-length:\s*(\d+)", head)
-                    if m and len(body) >= int(m.group(1)):
-                        break
-    return _parse(b"".join(chunks))
+    received = bytearray()
+    header_seen = False
+    while True:
+        try:
+            data = sock.recv(65536)
+        except socket.timeout:
+            break
+        if not data:
+            break
+        received.extend(data)
+        # 非 chunked 且已收满 Content-Length 时提前退出（用 bytearray 避免反复 join 造成 O(n^2)）
+        if not header_seen and b"\r\n\r\n" in received:
+            header_seen = True
+            head, body = _split_response(bytes(received))
+            if not re.search(r"(?i)transfer-encoding:\s*chunked", head):
+                m = re.search(r"(?i)content-length:\s*(\d+)", head)
+                if m and len(body) >= int(m.group(1)):
+                    break
+    return _parse(bytes(received))
 
 
 def _port_open(endpoint: str) -> bool:
@@ -274,7 +276,8 @@ def probe_runtime(config_paths: List[str]) -> RuntimeInfo:
             try:
                 status, data = _tcp_get(endpoint, "/version", secret)
             except Exception as e:
-                info.error = "TCP %s 请求失败：%s" % (endpoint, e)
+                if not info.error:
+                    info.error = "TCP %s 请求失败：%s" % (endpoint, e)
                 continue
             if status == 200 and data:
                 info.connected = True
@@ -286,8 +289,9 @@ def probe_runtime(config_paths: List[str]) -> RuntimeInfo:
                 info.tried = tried
                 return info
             if status in (401, 403):
-                info.error = "TCP %s 返回 %d：密钥不正确" % (endpoint, status)
-                break
+                if not info.error:
+                    info.error = "TCP %s 返回 %d：密钥不正确" % (endpoint, status)
+                continue
 
     # --- 命名管道 ---
     for pipe in pipes:
@@ -298,7 +302,8 @@ def probe_runtime(config_paths: List[str]) -> RuntimeInfo:
             try:
                 status, data = _pipe_get(pipe, "/version", secret)
             except Exception as e:
-                info.error = "管道 %s 请求失败：%s" % (pipe, e)
+                if not info.error:
+                    info.error = "管道 %s 请求失败：%s" % (pipe, e)
                 continue
             if status == 200 and data:
                 info.connected = True
@@ -310,8 +315,9 @@ def probe_runtime(config_paths: List[str]) -> RuntimeInfo:
                 info.tried = tried
                 return info
             if status in (401, 403):
-                info.error = "管道 %s 返回 %d：密钥不正确" % (pipe, status)
-                break
+                if not info.error:
+                    info.error = "管道 %s 返回 %d：密钥不正确" % (pipe, status)
+                continue
 
     info.tried = tried
     if not info.error:

@@ -90,6 +90,7 @@ def add_subscription(
     # 复用 parsers 的 YAML 加载（含编码与加密检测）
     from . import parsers
 
+    issues = issues if issues is not None else []
     data = parsers.load_yaml(path, issues) if existed else None
     if existed and data is None:
         # 解析失败（加密/损坏）：不要动原文件

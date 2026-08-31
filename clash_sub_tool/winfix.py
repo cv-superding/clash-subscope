@@ -44,11 +44,14 @@ else:
     DWMWA_TRANSITIONS_FORCEDISABLED = 3
 
     def _parse_color(hexstr: str) -> int:
-        h = hexstr.lstrip("#")
-        if len(h) == 3:
-            h = "".join(c * 2 for c in h)
-        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
-        return (b << 16) | (g << 8) | r  # COLORREF = 0x00BBGGRR
+        try:
+            h = (hexstr or "").lstrip("#")
+            if len(h) == 3:
+                h = "".join(c * 2 for c in h)
+            r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+            return (b << 16) | (g << 8) | r  # COLORREF = 0x00BBGGRR
+        except Exception:
+            return 0x00F4F6F9  # 兜底浅色（解析失败时不崩）
 
     def fix(root, bg_color="#f4f6f9"):
         """消除黑闪。返回是否至少成功应用了一层修复。"""
@@ -70,7 +73,13 @@ else:
                 wintypes.HWND, ctypes.c_int, ctypes.c_void_p,
             ]
             user32.SetClassLongPtrW.restype = ctypes.c_ssize_t
-            user32.SetClassLongPtrW(hwnd, GCLP_HBRBACKGROUND, brush)
+            prev_brush = user32.SetClassLongPtrW(hwnd, GCLP_HBRBACKGROUND, brush)
+            # 释放被替换掉的旧类画刷，避免 GDI 句柄泄漏
+            try:
+                gdi32.DeleteObject.argtypes = [wintypes.HGDIOBJ]
+                gdi32.DeleteObject(wintypes.HGDIOBJ(prev_brush))
+            except Exception:
+                pass
             if kernel32.GetLastError() == 0:
                 ok = True
         except Exception:

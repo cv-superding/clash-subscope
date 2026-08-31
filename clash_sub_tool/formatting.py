@@ -17,9 +17,14 @@ def mask_url(url: str, keep_head: int = 30, keep_tail: int = 4) -> str:
     """
     if not url:
         return ""
-    if len(url) <= keep_head + keep_tail + len(MASK):
-        keep_head = max(6, len(url) // 3)
-        keep_tail = 0
+    n = len(url)
+    if n <= keep_head + keep_tail + len(MASK):
+        # URL 太短，无法同时保留头尾+掩码：尽量保留头尾，掩码缩短
+        head = max(4, n // 3)
+        tail = max(2, n // 5)
+        if head + tail >= n:
+            return MASK  # 极短：整体打码
+        return url[:head] + MASK + url[-tail:]
     masked = url[:keep_head] + MASK
     if keep_tail:
         masked += url[-keep_tail:]

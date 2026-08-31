@@ -193,7 +193,6 @@ def discover_clients(issues: Optional[List[Issue]] = None) -> List[ClientInfo]:
             installed=bool(data_dir),
         )
         found.append(info)
-        d["_resolved_dir"] = data_dir  # 缓存，供后续模块使用（避免重复探测）
 
         if procs_hit and not data_dir:
             issues.append(

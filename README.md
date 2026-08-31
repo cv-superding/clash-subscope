@@ -77,8 +77,8 @@ Clash 系客户端（包括 Clash Verge Rev / Clash for Windows / FlClash / Nyan
 
 ![GUI 总览](docs/screenshot.png)
 
-*Clash Verge Rev 下的 6 条订阅配置：当前使用的 iKuuu_V2 用浅蓝高亮，
-同链接的两个配置共用×2 在状态列标识。底部诊断区为空表示一切正常。*
+*Clash Verge Rev 下的订阅配置列表：当前正在使用的配置用浅蓝高亮，
+同一链接被多个配置共用时在状态列显示「共用×N」。底部诊断区为空表示一切正常。*
 
 ---
 

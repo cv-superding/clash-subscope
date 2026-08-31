@@ -12,7 +12,7 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 from ttkbootstrap.dialogs import Messagebox
 
-from . import __version__, clients, importer, proxymgr, clashctl
+from . import __version__, clients, importer, proxymgr, clashctl, winfix
 from .formatting import (build_export_text, default_export_path, fmt_expire,
                          fmt_time, fmt_traffic, mask_url)
 from .models import LV_ERROR, LV_WARN, ScanResult, SubscriptionItem
@@ -69,6 +69,13 @@ class App:
         root.geometry("1140x760")
         root.minsize(980, 640)
         root.configure(bg=C_BG)
+
+        # Windows 层修复最大化/拉伸时的黑闪（接管 WM_ERASEBKGND，用应用背景色刷底，
+        # 避免 OS 在尺寸变动期间露出黑色）。非 Windows 或失败均为 no-op，不影响启动。
+        try:
+            winfix.fix(root, C_BG)
+        except Exception:
+            pass
 
         # 修复最大化/拉伸时的黑闪：Windows 的 WM_SIZE 与 Tk 的重绘之间
         # 存在一个时间窗，期间 OS 会露出未填充区域（表现为瞬间黑屏）。

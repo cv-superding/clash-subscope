@@ -2,10 +2,10 @@
 
 > 🔍 **一键提取本机 Clash 客户端的订阅链接** —— 仅读本地、默认脱敏、零上传。
 
-[![License]( MIT)](LICENSE)
-[![Platform]( Windows)](https://img.shields.io/badge/platform-Windows-0078d4)
-[![Python]( 3.8+)](https://img.shields.io/badge/python-3.8%2B-blue)
-[![Status]( Read--Only / Privacy--First)](https://img.shields.io/badge/status-read--only%20%2F%20privacy--first-success)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078d4.svg)]()
+[![Python: 3.8+](https://img.shields.io/badge/python-3.8%2B-blue.svg)]()
+[![Status: Read-Only / Privacy-First](https://img.shields.io/badge/status-read--only-success.svg)]()
 
 > 🔍 **One-click extract subscription links from your local Clash clients** —
 > read-only · masked by default · zero upload.

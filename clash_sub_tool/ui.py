@@ -8,7 +8,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from typing import List, Optional
 
-from . import __version__
+from . import __version__, clients, importer, proxymgr
 from .formatting import (build_export_text, default_export_path, fmt_expire,
                          fmt_time, fmt_traffic, mask_url)
 from .models import LV_ERROR, LV_WARN, ScanResult, SubscriptionItem
@@ -38,6 +38,7 @@ class App:
         self.q: "queue.Queue" = queue.Queue()
         self.scanning = False
         self._name_count = {}
+        self._proxy_state = None  # 关代理前的系统代理状态，用于恢复
 
         root.title("Clash SubScope · 订阅透镜  v%s" % __version__)
         root.geometry("1140x760")
@@ -47,6 +48,7 @@ class App:
         self._build_style()
         self._build_header()
         self._build_status()
+        self._build_import()
         self._build_table()
         self._build_actions()
         self._build_bottom()
@@ -109,12 +111,12 @@ class App:
         left = ttk.Frame(bar)
         left.pack(side="left")
         ttk.Label(left, text="Clash 订阅链接提取工具", style="Head.TLabel").pack(anchor="w")
-        ttk.Label(left, text="仅读取本机已有配置，不联网、不上传、不抓取订阅内容",
+        ttk.Label(left, text="扫描为本地只读；「导入到 Clash」为可选写操作（仅写本机配置，不联网上传）",
                   style="Sub.TLabel").pack(anchor="w", pady=(3, 0))
 
         right = ttk.Frame(bar)
         right.pack(side="right")
-        ttk.Label(right, text="本地只读 · 零上传", style="Badge.TLabel").pack(side="left", padx=(0, 12))
+        ttk.Label(right, text="纯本地 · 零上传", style="Badge.TLabel").pack(side="left", padx=(0, 12))
         self.btn_scan = ttk.Button(right, text="一键扫描", style="Accent.TButton",
                                    command=self.start_scan)
         self.btn_scan.pack(side="left")
@@ -143,6 +145,34 @@ class App:
             ttk.Label(row2, textvariable=var, style="Muted.TLabel",
                       width=width // 8).pack(side="left")
         ttk.Label(row2, textvariable=self.var_summary, style="Muted.TLabel").pack(side="left")
+
+    def _build_import(self) -> None:
+        """导入订阅到 Clash：粘贴链接 → 一键（关代理 + 写配置）。"""
+        card = ttk.Frame(self.root, style="Card.TFrame", padding=12)
+        card.pack(fill="x", padx=20, pady=(4, 10))
+
+        ttk.Label(card, text="导入订阅到 Clash（一键：临时关代理 → 写配置）",
+                  style="Card.TLabel", font=(FONT, 11, "bold")).pack(anchor="w")
+
+        row = ttk.Frame(card, style="Card.TFrame")
+        row.pack(fill="x", pady=(8, 0))
+
+        ttk.Label(row, text="链接：", style="Card.TLabel").pack(side="left")
+        self.entry_import = ttk.Entry(row, font=(FONT, 10))
+        self.entry_import.pack(side="left", fill="x", expand=True, padx=(6, 8))
+        self.entry_import.bind("<Return>", lambda e: self._import_clash_from_entry())
+
+        self.btn_import_clash = ttk.Button(row, text="➕ 导入到 Clash", style="Accent.TButton",
+                                           command=self._import_clash_from_entry)
+        self.btn_import_clash.pack(side="left")
+
+        self.btn_restore_proxy = ttk.Button(row, text="🔄 恢复代理", state="disabled",
+                                            command=self._restore_proxy)
+        self.btn_restore_proxy.pack(side="left", padx=(8, 0))
+
+        ttk.Label(card, text="提示：粘贴朋友的订阅链接后点「导入到 Clash」，工具会自动关掉系统代理"
+                  "（避开代理导致的 HTTP/2/403），写入后请在 Clash 内更新订阅，再点「恢复代理」。",
+                  style="Muted.TLabel").pack(anchor="w", pady=(6, 0))
 
     def _build_table(self) -> None:
         wrap = ttk.Frame(self.root, style="Card.TFrame")
@@ -191,6 +221,8 @@ class App:
         self.btn_copy_one.pack(side="left")
         self.btn_copy_all = ttk.Button(bar, text="复制全部链接", command=self._copy_all)
         self.btn_copy_all.pack(side="left", padx=8)
+        self.btn_import_sel = ttk.Button(bar, text="导入选中到 Clash", command=self._import_selected)
+        self.btn_import_sel.pack(side="left", padx=8)
         self.btn_export = ttk.Button(bar, text="导出为 TXT", command=self._export)
         self.btn_export.pack(side="left")
 
@@ -411,6 +443,112 @@ class App:
     # ------------------------------------------------------------------
     # 操作
     # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # 导入到 Clash（写操作，需用户确认）
+    # ------------------------------------------------------------------
+    def _find_target_client(self):
+        """选一个可写入的客户端：优先运行中的 Verge 系，其次任意已安装。"""
+        if not self.result:
+            return None
+        running = [c for c in self.result.clients if c.running]
+        if running:
+            for c in running:
+                if clients.get_def(c.client_id).get("flavor") == "verge":
+                    return c
+            return running[0]
+        installed = [c for c in self.result.clients if c.installed]
+        if installed:
+            for c in installed:
+                if clients.get_def(c.client_id).get("flavor") == "verge":
+                    return c
+            return installed[0]
+        return None
+
+    def _import_clash_from_entry(self) -> None:
+        self._import_clash(self.entry_import.get())
+
+    def _import_selected(self) -> None:
+        item = self._selected_item()
+        if not item:
+            self._toast("请先在表格中选择一行")
+            return
+        self.entry_import.delete(0, "end")
+        self.entry_import.insert(0, item.url)
+        self._import_clash(item.url)
+
+    def _import_clash(self, url: str) -> None:
+        url = (url or "").strip()
+        if not url:
+            self._toast("请输入或选择一条订阅链接")
+            return
+        if not url.lower().startswith(("http://", "https://")):
+            messagebox.showerror("链接无效", "订阅链接必须以 http:// 或 https:// 开头。")
+            return
+        target = self._find_target_client()
+        if not target:
+            messagebox.showerror(
+                "无可导入的客户端",
+                "未发现本机已安装的 Clash 客户端，无法写入订阅。\n"
+                "请先确认客户端已安装（建议正在运行）。")
+            return
+
+        running_note = ""
+        if target.running:
+            running_note = ("\n\n注意：%s 当前正在运行。导入会写入其配置文件，"
+                            "但需完全退出并重新打开后新订阅才会生效"
+                            "（否则可能被客户端覆盖）。建议先退出 %s 再继续。"
+                            % (target.name, target.name))
+        ok = messagebox.askyesno(
+            "确认导入",
+            "将把以下订阅添加到【%s】：\n\n%s\n\n"
+            "为让导入成功，工具会临时关闭系统代理（你的「梯子」），"
+            "导入完成后请点「恢复代理」重新开启。\n\n"
+            "工具只写配置文件、不替你拉取节点；节点需在 Clash 内手动点「更新」。%s"
+            % (target.name, url, running_note),
+        )
+        if not ok:
+            return
+
+        # 1) 临时关闭系统代理（让 Clash 直连拉取，避开 HTTP/2/403）
+        self._proxy_state = proxymgr.disable_system_proxy()
+        if self._proxy_state is None:
+            messagebox.showwarning(
+                "代理关闭失败",
+                "临时关闭系统代理时出错，导入仍会尝试进行；\n"
+                "若之后导入失败，请手动关闭梯子代理后重试。")
+        else:
+            self.btn_restore_proxy.configure(state="normal")
+
+        # 2) 写配置
+        ok_write, msg = importer.add_subscription(target, url)
+        if not ok_write:
+            messagebox.showerror("导入失败", msg)
+            self._toast("导入失败")
+            return
+
+        # 3) 成功
+        self._toast("已导入，请重启 Clash 并更新订阅")
+        messagebox.showinfo(
+            "导入成功",
+            "%s\n\n接下来请：\n"
+            "1) 完全退出并重新打开 %s（让新订阅生效）；\n"
+            "2) 在订阅上点「更新」（此时系统代理已关闭，可直连拉取，避开 HTTP/2/403）；\n"
+            "3) 节点拉取完成后，点本工具右上角「恢复代理」重新开启梯子。\n\n"
+            "提示：本工具只写配置，不替你拉取节点。" % (msg, target.name),
+        )
+        # 重新扫描以刷新列表
+        self.start_scan()
+
+    def _restore_proxy(self) -> None:
+        if proxymgr.restore_system_proxy(self._proxy_state):
+            self._toast("已恢复系统代理")
+            self.btn_restore_proxy.configure(state="disabled")
+            self._proxy_state = None
+        else:
+            messagebox.showwarning(
+                "恢复失败",
+                "自动恢复系统代理失败，请手动在 Windows 设置中重新开启代理 / 梯子。")
+
     def _selected_item(self) -> Optional[SubscriptionItem]:
         if not self.result:
             return None

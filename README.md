@@ -6,7 +6,7 @@
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078d4.svg)]()
 [![Python: 3.8+](https://img.shields.io/badge/python-3.8%2B-blue.svg)]()
 [![Status: Read-Only / Privacy-First](https://img.shields.io/badge/status-read--only-success.svg)]()
-[![Release: v1.0.0](https://img.shields.io/github/v/release/cv-superding/clash-subscope?label=release&color=0078d4)]()
+[![Release: v1.1.0](https://img.shields.io/github/v/release/cv-superding/clash-subscope?label=release&color=0078d4)]()
 
 > 🔍 **One-click extract subscription links from your local Clash clients** —
 > read-only · masked by default · zero upload.
@@ -17,7 +17,7 @@
 
 不想装 Python / 依赖？直接去 Releases 下载打包好的单文件 exe：
 
-- 👉 [clash-subscope.exe（v1.0.0）](https://github.com/cv-superding/clash-subscope/releases/download/v1.0.0/clash-subscope.exe)
+- 👉 [clash-subscope.exe（v1.1.0）](https://github.com/cv-superding/clash-subscope/releases/download/v1.1.0/clash-subscope.exe)
 
 双击即可运行（Windows 10 / 11）。同样遵循「仅读本地、默认脱敏、零上传」的隐私承诺。
 
@@ -52,6 +52,7 @@ Clash 系客户端（包括 Clash Verge Rev / Clash for Windows / FlClash / Nyan
 | 🕶️ 默认脱敏 | 链接前 30 字符 + 中段打码 + 末尾 4 字符；可一键切换明文 |
 | 📎 一键复制 | 单条 / 全部，复制到剪贴板 |
 | 💾 导出 TXT | 完整可读文本，含每条配置的全部信息 |
+| ➕ 一键导入到 Clash | 粘贴朋友的订阅链接 → 工具自动**临时关闭系统代理**（避开代理导致的 HTTP/2 中断 / 403），把链接写进本机客户端的 `profiles.yaml`，再让你手动点「恢复代理」 |
 | 🔧 运行时探测 | 同时支持 TCP（`external-controller`）与 Windows 命名管道（`external-controller-pipe`），核心关闭 TCP 时自动回落管道 |
 | 🌐 全中文界面 | 浅色主题，clam 风格，无任何依赖外网的服务 |
 
@@ -139,6 +140,7 @@ Python 3.8+。Windows 10 / 11 实测通过。
 6. 想存档 → 「导出为 TXT」。
 7. 看到明文需要勾选「显示完整链接（关闭脱敏）」，导出同理。
 8. 选一行后切到「选中项详情」tab 看完整 metadata。
+9. **把一条订阅导入到本机 Clash**：在顶部「导入订阅到 Clash」框粘贴链接（或从表格选中一行点「导入选中到 Clash」）→ 确认后工具会临时关闭系统代理并写入 `profiles.yaml`。写完后**完全退出并重新打开 Clash Verge Rev**，在订阅上点「更新」拉取节点，最后点本工具「恢复代理」重新开梯子。
 
 ---
 
@@ -179,6 +181,8 @@ Python 3.8+。Windows 10 / 11 实测通过。
 | "权限不足" | 在受限账户下运行 | 用有读取 `%APPDATA%` 权限的账户 |
 | "未能连接运行时接口" | 控制器被关 / 密钥不对 | 在客户端内开启外部控制器；密钥默认是 `set-your-secret`（出厂默认，不是占位符） |
 | 双击 .bat 报一堆乱码 | `.bat` 被错误地存为 UTF-8 | 用记事本"另存为 ANSI 编码"覆盖 |
+| 导入订阅时报 `http2 error` / 403 | 系统代理（梯子）把订阅拉取请求绕去了出口 IP，被服务端中断或拦截 | 用本工具的「导入到 Clash」会自动临时关代理；或手动关掉梯子代理、直连家宽后再导入，成功后再开回 |
+| 导入后要重启 Clash 才生效 | 客户端运行时可能覆盖 `profiles.yaml` | 导入前先完全退出 Clash 主程序，或导入后重启一次再「更新」订阅 |
 | 启动很慢 | 第一次扫描需要遍历多个目录 | 仅扫描一次，结果会一直留在表格里；后续「一键扫描」可手动按 |
 
 ---
@@ -200,6 +204,8 @@ clash-subscope/
 │  ├─ models.py                  数据模型
 │  ├─ clients.py                 客户端定义与本机发现
 │  ├─ parsers.py                 各类 profiles 解析
+│  ├─ importer.py                写订阅到客户端（导入功能，唯一写操作）
+│  ├─ proxymgr.py                Windows 系统代理的临时关闭/恢复
 │  ├─ runtime.py                 运行时接口（TCP + 命名管道）
 │  ├─ scanner.py                 编排
 │  ├─ formatting.py              脱敏、流量、到期、导出

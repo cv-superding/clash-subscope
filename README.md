@@ -6,7 +6,7 @@
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078d4.svg)]()
 [![Python: 3.8+](https://img.shields.io/badge/python-3.8%2B-blue.svg)]()
 [![Status: Read-Only / Privacy-First](https://img.shields.io/badge/status-read--only-success.svg)]()
-[![Release: v1.2.2](https://img.shields.io/github/v/release/cv-superding/clash-subscope?label=release&color=0078d4)]()
+[![Release: v1.2.3](https://img.shields.io/github/v/release/cv-superding/clash-subscope?label=release&color=0078d4)]()
 
 > 🔍 **One-click extract subscription links from your local Clash clients** —
 > read-only · masked by default · zero upload.
@@ -17,7 +17,7 @@
 
 不想装 Python / 依赖？直接去 Releases 下载打包好的单文件 exe：
 
-- 👉 [clash-subscope.exe（v1.2.2）](https://github.com/cv-superding/clash-subscope/releases/download/v1.2.2/clash-subscope.exe)
+- 👉 [clash-subscope.exe（v1.2.3）](https://github.com/cv-superding/clash-subscope/releases/download/v1.2.3/clash-subscope.exe)
 
 双击即可运行（Windows 10 / 11）。同样遵循「仅读本地、默认脱敏、零上传」的隐私承诺。
 
@@ -184,6 +184,7 @@ Python 3.8+。Windows 10 / 11 实测通过。
 | 导入订阅时报 `http2 error` / 403 | 系统代理（梯子）把订阅拉取请求绕去了出口 IP，被服务端中断或拦截 | 用本工具的「导入到 Clash」会自动临时关代理；或手动关掉梯子代理、直连家宽后再导入，成功后再开回 |
 | 导入后要重启 Clash 才生效 | 客户端运行时可能覆盖 `profiles.yaml` | 导入前先完全退出 Clash 主程序，或导入后重启一次再「更新」订阅 |
 | 启动很慢 | 第一次扫描需要遍历多个目录 | 仅扫描一次，结果会一直留在表格里；后续「一键扫描」可手动按 |
+| 最大化/拉伸时窗口"黑一下" | 旧版只修了应用层底色，没盖住 DWM 缩放动画的合成黑帧 | v1.2.3 起已三管齐下根治（类背景画刷 + 关 DWM 缩放动画 + WM_ERASEBKGND）；升级到 v1.2.3 即可。副作用：最大化变为瞬间切换、无缩放动画 |
 
 ---
 

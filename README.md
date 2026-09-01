@@ -6,7 +6,7 @@
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078d4.svg)]()
 [![Python: 3.8+](https://img.shields.io/badge/python-3.8%2B-blue.svg)]()
 [![Status: Read-Only / Privacy-First](https://img.shields.io/badge/status-read--only-success.svg)]()
-[![Release: v1.2.7](https://img.shields.io/github/v/release/cv-superding/clash-subscope?label=release&color=0078d4)]()
+[![Release: v1.2.8](https://img.shields.io/github/v/release/cv-superding/clash-subscope?label=release&color=0078d4)]()
 
 > 🔍 **One-click extract subscription links from your local Clash clients** —
 > read-only · masked by default · zero upload.
@@ -84,7 +84,7 @@ Clash 系客户端（包括 Clash Verge Rev / Clash for Windows / FlClash / Nyan
 
 不想装 Python / 依赖？直接去 Releases 下载打包好的单文件 exe：
 
-- 👉 [clash-subscope.exe（v1.2.7）](https://github.com/cv-superding/clash-subscope/releases/download/v1.2.7/clash-subscope.exe)
+- 👉 [clash-subscope.exe（v1.2.8）](https://github.com/cv-superding/clash-subscope/releases/download/v1.2.8/clash-subscope.exe)
 
 双击即可运行（Windows 10 / 11）。同样遵循「仅读本地、默认脱敏、零上传」的隐私承诺。
 
@@ -367,7 +367,7 @@ Clash Verge Rev 等客户端会安装一个 **Windows 服务**（`clash-verge-se
 | **提示「无法自动关闭，请用任务管理器手动结束」** | 非管理员模式下服务拒绝被终止 | **右键 exe → 以管理员身份运行**；或先手动退出 Clash 再导入；也可按[上文](#-关于管理员权限与-clash-服务)禁用服务 |
 | 关工具窗口时代理没恢复 | 导入成功后代理仍处于关闭态 | v1.2.5 起关窗会**弹窗询问**是否恢复，不会静默遗留 |
 | 启动很慢 | 第一次扫描需要遍历多个目录 | 仅扫描一次，结果会一直留在表格里；后续可用「一键扫描」手动刷新 |
-| 最大化/拉伸时窗口"黑一下" | 旧版只修了应用层底色，没盖住 DWM 缩放动画的合成黑帧 | v1.2.3 起三管齐下根治（类背景画刷 + 关 DWM 缩放动画 + `WM_ERASEBKGND`）。副作用：最大化变为瞬间切换、无缩放动画 |
+| 最大化/拉伸时窗口"黑一下" | 之前的修复**打错了窗口**：`winfo_id()` 返回的是 Tk 内部子窗口 `TkChild`，真正的顶层 `TkTopLevel` 从未被修复；且窗口类带 `CS_HREDRAW｜CS_VREDRAW`，会让 resize 时强制全区域擦除 | **v1.2.8 已定位真因**：改对顶层 HWND + 清除重绘标志 + 换类背景画刷。副作用：最大化仍为瞬间切换（关闭了 DWM 缩放动画） |
 | 底部"诊断与排查建议"显示不全 | 旧版默认窗口高度不足 | v1.2.6 起默认高度改为 900，最小高度 720 |
 
 ---
@@ -406,6 +406,15 @@ clash-subscope/
 
 ## 📝 更新日志
 
+### v1.2.8
+- **黑闪真因修复（前几版全部修错了对象）**。
+  实测发现 `root.winfo_id()` 返回的是 Tk 内部子窗口 `TkChild`，**不是顶层窗口**；
+  真正的顶层是 `TkTopLevel`（需用 `GetAncestor(GA_ROOT)` 上溯）。
+  v1.2.3 那套三件套一直作用在 TkChild 上，顶层窗口始终是
+  `brush=0x0`（无画刷 → 系统黑）+ `CS_HREDRAW｜CS_VREDRAW`。
+- 修复：改对顶层 HWND、**清除 `CS_HREDRAW｜CS_VREDRAW`**（resize 强制全区域擦除，
+  Win32 闪烁最经典的根因）、换类背景画刷，并对 TkTopLevel 与 TkChild 两层同时生效。
+
 ### v1.2.7
 - **修复「点确认后 Clash 没关」**：根因是 `clash-verge-service.exe` 会毫秒级拉起被杀的
   主进程。导入流程现改为**连服务一起终止**，并修正了「找不到目标时静默返回成功」
@@ -428,8 +437,9 @@ clash-subscope/
 - `ProxyEnable` 以字符串型 REG_SZ 存储时也能正确识别与还原。
 - HTTP 响应读取改用 `bytearray`，消除大响应下的 O(n²)。
 
-### v1.2.3
-- 根治最大化/拉伸黑闪：类背景画刷 + 关闭 DWM 缩放动画 + 接管 `WM_ERASEBKGND`。
+### v1.2.3（未能根治，真因见 v1.2.8）
+- 尝试修复最大化/拉伸黑闪：类背景画刷 + 关闭 DWM 缩放动画 + 接管 `WM_ERASEBKGND`。
+  方向有误且打错了窗口对象，黑闪依旧；v1.2.8 才定位到真因。
 
 ### v1.2.0
 - 界面重构为 ttkbootstrap / cosmo 现代化主题，替换原生 Win32 控件样式。

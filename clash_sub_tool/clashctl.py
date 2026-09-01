@@ -9,10 +9,23 @@
 """
 
 import os
+import time
 from typing import List, Optional, Tuple
 
 from . import clients
 from .models import ClientInfo
+
+
+def _pid_exists(pid: int) -> bool:
+    """判断某个 pid 是否仍然存在（不枚举全量进程，开销极小）。"""
+    if not pid:
+        return False
+    try:
+        import psutil  # type: ignore
+
+        return bool(psutil.pid_exists(pid))
+    except Exception:
+        return False
 
 
 def _psutil_procs() -> List:
@@ -96,4 +109,55 @@ def close(client_info: ClientInfo) -> Tuple[bool, str]:
     if failed:
         return False, "无法自动关闭：%s（请用任务管理器手动结束）" % ", ".join(failed)
     # 没命中任何进程（可能刚退出，或 psutil 读不到）
+    return True, "未检测到运行中的进程（可能已退出）"
+
+
+def close_and_wait(client_info: ClientInfo, timeout: float = 3.0) -> Tuple[bool, str]:
+    """关闭客户端并等待其进程真正退出（避免写入时文件句柄尚未释放）。
+
+    与 close() 的区别：这里只对被 kill 的 pid 做 pid_exists 探测，
+    不会反复枚举全量进程列表，轮询开销极小。
+    """
+    defs = clients.get_def(client_info.client_id)
+    if not defs:
+        return False, "找不到该客户端定义，无法关闭"
+    names = set(n.lower() for n in defs.get("processes", []))
+    if not names:
+        return False, "该客户端无已知进程名，无法自动关闭"
+
+    killed: List[str] = []
+    failed: List[str] = []
+    pids: List[int] = []
+    for p in _psutil_procs():
+        try:
+            name = (p.info.get("name") or "").lower()
+        except Exception:
+            continue
+        if name not in names:
+            continue
+        try:
+            pid = p.info.get("pid")
+            p.kill()
+            killed.append(p.info.get("name") or name)
+            if pid:
+                pids.append(pid)
+        except Exception as e:
+            failed.append("%s(%s)" % (p.info.get("name") or name, e))
+
+    # 等待被 kill 的进程真正退出（只探测已知 pid）
+    if pids:
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if not any(_pid_exists(pid) for pid in pids):
+                break
+            time.sleep(0.1)
+
+    if failed and not killed:
+        return False, "无法自动关闭：%s（请用任务管理器手动结束）" % ", ".join(failed)
+    if killed:
+        parts = "、".join(sorted(set(killed)))
+        if failed:
+            return True, "已关闭 %s，但部分进程无法终止：%s（请手动结束）" % (
+                parts, ", ".join(failed))
+        return True, "已关闭：%s" % parts
     return True, "未检测到运行中的进程（可能已退出）"

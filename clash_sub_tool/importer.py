@@ -76,7 +76,11 @@ def add_subscription(
     backup_path = None
     if existed:
         try:
-            backup_path = "%s.bak_import_%d" % (path, int(time.time()))
+            # 备份名用可读时间戳；若同秒重复导入导致重名，追加随机后缀，
+            # 避免第二次导入覆盖（或删掉）第一次的备份
+            backup_path = "%s.bak_import_%s" % (path, time.strftime("%Y%m%d_%H%M%S"))
+            if os.path.isfile(backup_path):
+                backup_path = "%s_%s" % (backup_path, uuid.uuid4().hex[:6])
             shutil.copy2(path, backup_path)
         except OSError as e:
             return False, "备份原文件失败，已取消写入：%s" % e
@@ -152,7 +156,8 @@ def add_subscription(
         import yaml  # type: ignore
 
         text = yaml.safe_dump(data, allow_unicode=True, sort_keys=False, default_flow_style=False)
-        tmp = path + ".tmp_%d" % int(time.time())
+        # 临时文件名加随机后缀，避免同秒多次写入时互相覆盖
+        tmp = "%s.tmp_%s" % (path, uuid.uuid4().hex[:8])
         with open(tmp, "w", encoding="utf-8") as f:
             f.write(text)
         # 原子替换：先写临时文件再 rename，降低写到一半被中断的风险

@@ -125,7 +125,9 @@ def _first_url(value: Any) -> str:
 
 
 def _short_name(name: str, fallback: str = "") -> str:
-    name = (name or "").strip()
+    # 兼容 name 为数字/字典等非字符串类型：YAML 里写 name: 12345 时
+    # 若直接 (name or "").strip() 会 AttributeError，导致该客户端全部条目丢失。
+    name = str(name or "").strip()
     if name:
         return name
     return fallback or "未命名配置"
@@ -314,8 +316,10 @@ def collect_config_paths(client_def: Dict, data_dir: str) -> List[str]:
                 data_dir = p
                 break
     for key in ("runtime_configs", "app_configs", "profiles_files"):
+        if not data_dir:
+            break  # 无数据目录时不要用裸文件名去 CWD 里找（可能误命中无关文件）
         for fn in client_def.get(key, []):
-            p = os.path.join(data_dir, fn) if data_dir else fn
+            p = os.path.join(data_dir, fn)
             if os.path.isfile(p) and p not in paths:
                 paths.append(p)
     for cand in client_def.get("extra_config_dirs", []):

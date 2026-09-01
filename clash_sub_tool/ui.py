@@ -65,6 +65,8 @@ class App:
         self.scanning = False
         self._name_count = {}
         self._proxy_state = None  # 关代理前的系统代理状态，用于恢复
+        self._importing = False        # 导入进行中（避免与扫描互相覆盖按钮状态）
+        self._pending_rescan = False   # 导入后需补一次扫描（当前扫描正忙时标记）
 
         root.title("Clash SubScope · 订阅透镜  v%s" % __version__)
         root.geometry("1140x760")
@@ -97,6 +99,10 @@ class App:
 
         root.after(120, self._poll)
         root.after(200, self.start_scan)
+
+        # 关窗时若系统代理仍处于"待恢复"状态，先询问是否恢复，
+        # 避免用户关掉工具后系统代理被永久遗留在关闭状态（重开工具也拿不回状态）。
+        root.protocol("WM_DELETE_WINDOW", self._on_close)
 
     # ------------------------------------------------------------------
     # 构建界面
@@ -290,11 +296,20 @@ class App:
     # ------------------------------------------------------------------
     def start_scan(self) -> None:
         if self.scanning:
+            # 已有扫描在跑：标记"待补扫"，否则本次请求会被静默吞掉
+            # （典型场景：导入成功后要刷新列表，但上一次扫描尚未结束）
+            self._pending_rescan = True
             return
         self.scanning = True
         self.btn_scan.configure(state="disabled", text="扫描中…")
         self._toast("正在扫描本机配置…")
         threading.Thread(target=self._worker, daemon=True).start()
+
+    def _enable_scan_button(self) -> None:
+        """扫描结束后恢复按钮；若导入进行中则保持禁用，避免被竞态重新点亮。"""
+        if self._importing:
+            return
+        self.btn_scan.configure(state="normal", text="一键扫描")
 
     def _worker(self) -> None:
         try:
@@ -325,7 +340,7 @@ class App:
 
     def _on_failed(self, payload: str) -> None:
         self.scanning = False
-        self.btn_scan.configure(state="normal", text="一键扫描")
+        self._enable_scan_button()
         self._set_text(self.txt_diag, "扫描过程中出现未捕获的异常：\n\n" + payload, "error")
         self._toast("扫描失败")
         messagebox.showerror("扫描失败",
@@ -333,7 +348,7 @@ class App:
 
     def _on_scanned(self, result: ScanResult) -> None:
         self.scanning = False
-        self.btn_scan.configure(state="normal", text="一键扫描")
+        self._enable_scan_button()
         self.result = result
         self._render_status()
         self._render_table()
@@ -341,6 +356,10 @@ class App:
         self._show_detail()
         n = len(result.items)
         self._toast("扫描完成，共 %d 个订阅配置" % n)
+        # 若扫描期间又有刷新请求（如导入成功后），补跑一次，避免列表停在旧数据
+        if self._pending_rescan:
+            self._pending_rescan = False
+            self.root.after(60, self.start_scan)
 
     # ------------------------------------------------------------------
     # 渲染
@@ -555,6 +574,7 @@ class App:
 
     def _import_busy(self, busy: bool) -> None:
         """导入进行中时禁用相关按钮，避免重复触发。"""
+        self._importing = busy
         state = "disabled" if busy else "normal"
         try:
             self.btn_import_clash.configure(state=state)
@@ -567,7 +587,9 @@ class App:
         """后台执行：关闭客户端 → 关代理 → 写配置；结果回主线程处理。"""
         try:
             if need_close:
-                ok_close, msg_close = clashctl.close(target)
+                # close_and_wait 内部只对被 kill 的 pid 做探测，
+                # 不会反复枚举全量进程列表，等待开销极小
+                ok_close, msg_close = clashctl.close_and_wait(target)
                 if not ok_close:
                     self.root.after(0, lambda: (
                         self._import_busy(False),
@@ -577,16 +599,12 @@ class App:
                             % (msg_close, target.name)),
                     ))
                     return
-                # 轮询等待进程真正退出并释放文件句柄（最多 ~3s），
-                # 替代主线程 sleep，避免界面冻结
-                for _ in range(30):
-                    if not clashctl.is_running(target):
-                        break
-                    time.sleep(0.1)
 
             # 1) 临时关闭系统代理（让 Clash 直连拉取，避开 HTTP/2/403）
             state = proxymgr.disable_system_proxy()
             if state is None:
+                # 关代理失败：清空残留状态，避免之后误用旧状态去「恢复」
+                self._proxy_state = None
                 self.root.after(0, lambda: messagebox.showwarning(
                     "代理关闭失败",
                     "临时关闭系统代理时出错，导入仍会尝试进行；\n"
@@ -640,6 +658,33 @@ class App:
             messagebox.showwarning(
                 "恢复失败",
                 "自动恢复系统代理失败，请手动在 Windows 设置中重新开启代理 / 梯子。")
+
+    def _on_close(self) -> None:
+        """关闭窗口：若系统代理仍处于待恢复状态，先询问是否恢复。
+
+        选「是」→ 恢复代理后退出；选「否」→ 保持代理关闭直接退出
+        （用户可能还要先在 Clash 里点「更新」拉取节点，此时需要代理保持关闭）。
+        """
+        if self._proxy_state:
+            try:
+                ok = messagebox.askyesno(
+                    "系统代理仍处于关闭状态",
+                    "本工具之前为了导入订阅，临时关闭了系统代理，目前尚未恢复。\n\n"
+                    "是否现在恢复系统代理并退出？\n\n"
+                    "选「否」将保持代理关闭直接退出——若你还要先在 Clash 里点「更新」"
+                    "拉取节点，可以选「否」。\n"
+                    "注意：选「否」后本工具不再保留恢复能力，需到 "
+                    "Windows「设置 → 网络和 Internet → 代理」手动重新开启。",
+                )
+            except Exception:
+                ok = False
+            if ok:
+                proxymgr.restore_system_proxy(self._proxy_state)
+                self._proxy_state = None
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
 
     def _selected_item(self) -> Optional[SubscriptionItem]:
         if not self.result:

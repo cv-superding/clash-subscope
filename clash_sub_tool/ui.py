@@ -587,15 +587,18 @@ class App:
         """后台执行：关闭客户端 → 关代理 → 写配置；结果回主线程处理。"""
         try:
             if need_close:
+                # 必须连服务一起杀：Clash Verge Rev 的 clash-verge-service.exe
+                # 会立刻拉起被 kill 的主进程，导致写入仍被覆盖（v1.1.1 历史 bug）。
                 # close_and_wait 内部只对被 kill 的 pid 做探测，
-                # 不会反复枚举全量进程列表，等待开销极小
-                ok_close, msg_close = clashctl.close_and_wait(target)
+                # 不会反复枚举全量进程列表，等待开销极小。
+                ok_close, msg_close = clashctl.close_and_wait(target, kill_service=True)
                 if not ok_close:
                     self.root.after(0, lambda: (
                         self._import_busy(False),
                         messagebox.showerror(
                             "无法关闭 Clash",
-                            "%s\n\n请手动在系统托盘退出 %s 后重试导入。"
+                            "%s\n\n请手动在系统托盘退出 %s 后重试导入。\n"
+                            "若是 Windows 服务被杀失败，请尝试以管理员身份运行本工具。"
                             % (msg_close, target.name)),
                     ))
                     return

@@ -69,8 +69,8 @@ class App:
         self._pending_rescan = False   # 导入后需补一次扫描（当前扫描正忙时标记）
 
         root.title("Clash SubScope · 订阅透镜  v%s" % __version__)
-        root.geometry("1140x760")
-        root.minsize(980, 640)
+        root.geometry("1140x900")
+        root.minsize(980, 720)
         root.configure(bg=C_BG)
 
         # Windows 层修复最大化/拉伸时的黑闪（接管 WM_ERASEBKGND，用应用背景色刷底，

@@ -80,14 +80,11 @@ class App:
         except Exception:
             pass
 
-        # 修复最大化/拉伸时的黑闪：Windows 的 WM_SIZE 与 Tk 的重绘之间
-        # 存在一个时间窗，期间 OS 会露出未填充区域（表现为瞬间黑屏）。
-        # 给 root 绑 <Configure>，在每次尺寸变化时立即调用 update_idletasks
-        # 让 Tk 同步重绘，堵住那个黑帧。仅作用于 root 自身的尺寸变化。
-        def _on_root_configure(event):
-            if event.widget is root:
-                root.update_idletasks()
-        root.bind("<Configure>", _on_root_configure)
+        # 注：早期版本曾在此绑定 <Configure> 并调用 root.update_idletasks() 试图
+        # 「同步重绘堵住黑帧」。实测该写法是性能杀手——拖动边框时鼠标每移动一次
+        # 就触发一次 Configure，每次都强制同步重绘整个界面，叠加窗口树较复杂时
+        # 会造成明显卡顿（用户实测拖动窗口卡 ~10 秒）。黑闪的根治放在 winfix.py
+        # 的 Win32 层处理，这里不再做 Tk 层的同步重绘。
 
         self._build_style()
         self._build_header()
@@ -98,7 +95,17 @@ class App:
         self._build_bottom()
 
         root.after(120, self._poll)
-        root.after(200, self.start_scan)
+
+        # 启动是否自动扫描：默认「不自动扫描」。
+        # 早期版本启动 200ms 后自动扫一次，本意是「打开即见结果」，但实测有两个问题：
+        #   1) 用户没点「一键扫描」就自作主张开扫，行为不符合预期；
+        #   2) 扫描在后台遍历目录/读 YAML，启动初期拖窗口会与扫描线程抢资源，加重卡顿。
+        # 现改为默认关闭，由用户点「一键扫描」触发；想要自动扫描可设环境变量
+        # SUBSCOPE_AUTOSCAN=1。
+        if os.environ.get("SUBSCOPE_AUTOSCAN") == "1":
+            root.after(200, self.start_scan)
+        else:
+            self._toast("点击「一键扫描」开始检测本机 Clash 配置")
 
         # 关窗时若系统代理仍处于"待恢复"状态，先询问是否恢复，
         # 避免用户关掉工具后系统代理被永久遗留在关闭状态（重开工具也拿不回状态）。
@@ -221,8 +228,8 @@ class App:
         self.tree.tag_configure("current", background=C_CUR_BG)
         self.tree.tag_configure("odd", background="#fafbfc")
 
-        vs = ttk.Scrollbar(wrap, orient="vertical", command=self.tree.yview)
-        hs = ttk.Scrollbar(wrap, orient="horizontal", command=self.tree.xview)
+        vs = tk.Scrollbar(wrap, orient="vertical", command=self.tree.yview)
+        hs = tk.Scrollbar(wrap, orient="horizontal", command=self.tree.xview)
         self.tree.configure(yscrollcommand=vs.set, xscrollcommand=hs.set)
 
         self.tree.grid(row=0, column=0, sticky="nsew")
@@ -234,7 +241,7 @@ class App:
         self.tree.bind("<<TreeviewSelect>>", lambda e: self._show_detail())
         self.tree.bind("<Double-1>", lambda e: self._copy_selected())
 
-        self.empty_hint = ttk.Label(wrap, text="点击下方「一键扫描」开始，首次打开会自动扫描一次。",
+        self.empty_hint = ttk.Label(wrap, text="点击「一键扫描」开始检测本机 Clash 配置",
                                     style="Card.TLabel", foreground=C_MUTED)
         self.empty_hint.place(relx=0.5, rely=0.5, anchor="center")
 

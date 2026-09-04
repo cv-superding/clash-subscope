@@ -6,7 +6,7 @@
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows-0078d4.svg)]()
 [![Python: 3.8+](https://img.shields.io/badge/python-3.8%2B-blue.svg)]()
 [![Status: Read-Only / Privacy-First](https://img.shields.io/badge/status-read--only-success.svg)]()
-[![Release: v1.2.8](https://img.shields.io/github/v/release/cv-superding/clash-subscope?label=release&color=0078d4)]()
+[![Release: v1.2.9](https://img.shields.io/github/v/release/cv-superding/clash-subscope?label=release&color=0078d4)]()
 
 > 🔍 **One-click extract subscription links from your local Clash clients** —
 > read-only · masked by default · zero upload.
@@ -84,7 +84,7 @@ Clash 系客户端（包括 Clash Verge Rev / Clash for Windows / FlClash / Nyan
 
 不想装 Python / 依赖？直接去 Releases 下载打包好的单文件 exe：
 
-- 👉 [clash-subscope.exe（v1.2.8）](https://github.com/cv-superding/clash-subscope/releases/download/v1.2.8/clash-subscope.exe)
+- 👉 [clash-subscope.exe（v1.2.9）](https://github.com/cv-superding/clash-subscope/releases/download/v1.2.9/clash-subscope.exe)
 
 双击即可运行（Windows 10 / 11）。同样遵循「仅读本地、默认脱敏、零上传」的隐私承诺。
 
@@ -177,7 +177,7 @@ Python 3.8+。Windows 10 / 11 实测通过。
 
 ## 🚀 基础使用
 
-1. 启动后 GUI **自动扫描一次**，无需手动触发。
+1. 启动后表格为空，点击「一键扫描」开始检测本机 Clash 配置。
 2. **状态卡片**告诉你 Clash 客户端的运行情况、核心版本、控制器通道。
 3. **订阅表格**列出所有订阅配置。
 4. 想要某一条链接 → 选中 → 「复制选中链接」。
@@ -366,7 +366,8 @@ Clash Verge Rev 等客户端会安装一个 **Windows 服务**（`clash-verge-se
 | **点确认后 Clash 没关** | `clash-verge-service.exe` 会立刻拉起被杀的主进程 | v1.2.7 起导入流程会**连服务一起杀**；杀 Windows 服务需管理员，**右键 exe → 以管理员身份运行** |
 | **提示「无法自动关闭，请用任务管理器手动结束」** | 非管理员模式下服务拒绝被终止 | **右键 exe → 以管理员身份运行**；或先手动退出 Clash 再导入；也可按[上文](#-关于管理员权限与-clash-服务)禁用服务 |
 | 关工具窗口时代理没恢复 | 导入成功后代理仍处于关闭态 | v1.2.5 起关窗会**弹窗询问**是否恢复，不会静默遗留 |
-| 启动很慢 | 第一次扫描需要遍历多个目录 | 仅扫描一次，结果会一直留在表格里；后续可用「一键扫描」手动刷新 |
+| 启动很慢 | 第一次扫描需要遍历多个目录 | 启动不再自动扫描，手动点「一键扫描」即可；仅扫描一次，结果会一直留在表格里 |
+| 拖动窗口边缘缩放时卡顿 | 旧版表格区 `ttk.Scrollbar` 导致 resize 时连锁重排（394ms/次） | v1.2.9 起换为原生 `tk.Scrollbar`，resize 仅需 48ms（提速 88%），滚动功能完整保留。代价：滚动条从 ttk 主题风格变为经典 Win32 灰色外观 |
 | 最大化/拉伸时窗口"黑一下" | 之前的修复**打错了窗口**：`winfo_id()` 返回的是 Tk 内部子窗口 `TkChild`，真正的顶层 `TkTopLevel` 从未被修复；且窗口类带 `CS_HREDRAW｜CS_VREDRAW`，会让 resize 时强制全区域擦除 | **v1.2.8 已定位真因**：改对顶层 HWND + 清除重绘标志 + 换类背景画刷。副作用：最大化仍为瞬间切换（关闭了 DWM 缩放动画） |
 | 底部"诊断与排查建议"显示不全 | 旧版默认窗口高度不足 | v1.2.6 起默认高度改为 900，最小高度 720 |
 
@@ -406,14 +407,23 @@ clash-subscope/
 
 ## 📝 更新日志
 
-### v1.2.8
-- **黑闪真因修复（前几版全部修错了对象）**。
-  实测发现 `root.winfo_id()` 返回的是 Tk 内部子窗口 `TkChild`，**不是顶层窗口**；
+### v1.2.9
+- **拖动窗口卡 10 秒根因修复**。用脚本逐个隔离定位，真凶是 `ttk.Scrollbar`——
+  Treeview + ttk 滚动条在 resize 时连锁重排，垂直+水平叠加 **394ms/次**。
+  修复：表格区滚动条换为原生 `tk.Scrollbar`（轻量无主题开销），
+  **resize 394ms → 48ms（提速 88%）**，滚动功能完整保留。
+- **启动自动扫描改为默认关闭**。早期「启动即扫」让用户觉得自作主张，
+  且扫描线程抢资源加重卡顿。现需手动点「一键扫描」触发。
+- 移除 `WS_EX_COMPOSITED` 默认启用（对 Tk 是性能灾难，卡 10 秒）。
+- 移除 `<Configure>` 中的 `update_idletasks()`（每次鼠标移动同步重绘全界面）。
+- 撤回 v1.2.8 的「清除 CS_HREDRAW|CS_VREDRAW」——对 Tk 子窗口密集布局是反作用，
+  导致子窗口之间的客户区空隙不刷新（"左侧一块黑"），恢复保留。
+
+### v1.2.8（注意：清除重绘标志已被 v1.2.9 撤回）
+- 实测发现 `root.winfo_id()` 返回的是 Tk 内部子窗口 `TkChild`，**不是顶层窗口**；
   真正的顶层是 `TkTopLevel`（需用 `GetAncestor(GA_ROOT)` 上溯）。
-  v1.2.3 那套三件套一直作用在 TkChild 上，顶层窗口始终是
-  `brush=0x0`（无画刷 → 系统黑）+ `CS_HREDRAW｜CS_VREDRAW`。
-- 修复：改对顶层 HWND、**清除 `CS_HREDRAW｜CS_VREDRAW`**（resize 强制全区域擦除，
-  Win32 闪烁最经典的根因）、换类背景画刷，并对 TkTopLevel 与 TkChild 两层同时生效。
+- 修复：改对顶层 HWND、换类背景画刷、`WM_ERASEBKGND` 子类化、DWM 关动画。
+- ⚠️ 错误地清除了 `CS_HREDRAW｜CS_VREDRAW`（v1.2.9 已撤回并改用正确方案）。
 
 ### v1.2.7
 - **修复「点确认后 Clash 没关」**：根因是 `clash-verge-service.exe` 会毫秒级拉起被杀的
